@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NASA APOD - Imagem do Dia</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background:#0b1020; color:#e6eef8; margin:0; padding:20px; }
+    .container{ max-width:900px; margin:24px auto; }
+    h1{ font-size:24px; margin:8px 0 12px; text-align:center }
+    .card{ background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)); padding:16px; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+    .media{ text-align:center; margin-bottom:12px }
+    img { max-width:100%; border-radius:6px; }
+    iframe{ width:100%; height:480px; border:none; border-radius:6px; }
+    .explanation{ white-space:pre-wrap; line-height:1.5; margin-top:12px; color:#d6e6ff }
+    .meta{ font-size:14px; color:#9fb0d6; text-align:center }
+    .error{ color:#ff9aa2; text-align:center }
+    .spinner{ text-align:center; padding:40px 0 }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NASA APOD — Imagem do Dia</h1>
+    <div id="content" class="card">
+      <div class="spinner">Carregando...</div>
+    </div>
+    <p class="meta">Fonte: NASA APOD · Dados traduzidos pelo serviço desta aplicação</p>
+  </div>
+
+  <script>
+    async function loadApod(){
+      const content = document.getElementById('content');
+      try{
+        const res = await fetch('/apod');
+        if(!res.ok){
+          content.innerHTML = `<div class="error">Erro ao obter APOD: ${res.status} ${res.statusText}</div>`;
+          return;
+        }
+        const data = await res.json();
+
+        // Verifica se a URL é de vídeo (YouTube) — a API da NASA pode retornar videos
+        const url = data.url || '';
+        const isYoutube = url.includes('youtube.com') || url.includes('youtu.be');
+
+        let mediaHtml = '';
+        if(isYoutube){
+          // Converte URL em embed se possível
+          let embed = url;
+          if(url.includes('watch?v=')){
+            embed = url.replace('watch?v=', 'embed/');
+          }
+          if(url.includes('youtu.be/')){
+            embed = url.replace('youtu.be/', 'www.youtube.com/embed/');
+          }
+          mediaHtml = `<div class="media"><iframe src="${embed}" allowfullscreen></iframe></div>`;
+        } else {
+          mediaHtml = `<div class="media"><img src="${url}" alt="Imagem do dia da NASA"></div>`;
+        }
+
+        content.innerHTML = `
+          <div class="media">${mediaHtml}</div>
+          <h2 style="text-align:center">${escapeHtml(data.title || 'Título indisponível')}</h2>
+          <div class="explanation">${escapeHtml(data.explanation || '')}</div>
+        `;
+      }catch(err){
+        content.innerHTML = `<div class="error">Erro ao carregar: ${escapeHtml(err.message || String(err))}</div>`;
+      }
+    }
+
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
+    }
+
+    loadApod();
+  </script>
+</body>
+</html>
