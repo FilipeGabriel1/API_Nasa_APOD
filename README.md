@@ -1,3 +1,4 @@
+```markdown
 # NasaApod
 
 Aplicação Spring Boot que consulta a API NASA APOD (Astronomy Picture Of the Day), traduz título e explicação para pt-BR e expõe endpoints REST + uma página web estática para visualizar a imagem do dia.
@@ -107,3 +108,4 @@ Assista ao vídeo demonstrativo do projeto no YouTube:
 
 https://youtu.be/yTW2hgcMS2o?si=GA3ll5V4ZDx_bGBT
 
+```
