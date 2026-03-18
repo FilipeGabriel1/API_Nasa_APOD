@@ -3,12 +3,6 @@
 
 Aplicação Spring Boot que consulta a API NASA APOD (Astronomy Picture Of the Day), traduz título e explicação para pt-BR e expõe endpoints REST + uma página web estática para visualizar a imagem do dia.
 
-**Integrantes**
-
-- Filipe Gabriel
-- Maria Iasmin
-- Maria Roberta
-- Paulo Cesar
 
 ----
 
