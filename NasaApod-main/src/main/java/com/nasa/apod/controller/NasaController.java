@@ -1,5 +1,8 @@
 package com.nasa.apod.controller;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,12 +13,15 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.nasa.apod.model.Apod;
+import com.nasa.apod.model.BuscaAstronomicaItem;
 import com.nasa.apod.service.TraducaoService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +43,9 @@ public class NasaController {
     // URL montada da API APOD da NASA (baseUrl + ?api_key=APIKEY)
     private final String apodUrl;
 
+    // URL base da API de busca do acervo multimídia da NASA
+    private final String nasaSearchUrl;
+
     // Serviço responsável por traduzir textos para português
     private final TraducaoService traducaoService;
 
@@ -50,10 +59,12 @@ public class NasaController {
     public NasaController(RestTemplate restTemplate,
                           @Value("${nasa.api.url}") String baseUrl,
                           @Value("${nasa.api.key}") String apiKey,
+                          @Value("${nasa.images.api.url}") String nasaSearchUrl,
                           TraducaoService traducaoService) {
         this.restTemplate = restTemplate;
         // Monta a URL completa com a chave de API
         this.apodUrl = String.format("%s?api_key=%s", baseUrl, apiKey);
+        this.nasaSearchUrl = nasaSearchUrl;
         this.traducaoService = traducaoService;
     }
 
@@ -156,6 +167,103 @@ public class NasaController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body("Serviço indisponível no momento. Tente novamente mais tarde.");
         }
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Busca planetas, estrelas e outros conteúdos no acervo da NASA")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Resultados de busca retornados com sucesso",
+                content = @Content(mediaType = "application/json",
+                        schema = @Schema(implementation = BuscaAstronomicaItem.class))),
+        @ApiResponse(responseCode = "400", description = "Parâmetro de busca inválido"),
+        @ApiResponse(responseCode = "503", description = "Serviço indisponível")
+    })
+    public ResponseEntity<?> buscarConteudoAstronomico(
+            @RequestParam("query") String query,
+            @RequestParam(value = "limit", defaultValue = "8") Integer limit) {
+        if (query == null || query.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Informe o parâmetro query para pesquisar.");
+        }
+
+        int limiteSeguro = Math.max(1, Math.min(limit, 20));
+
+        try {
+            JsonNode resposta = restTemplate.getForObject(
+                    nasaSearchUrl + "?q={query}",
+                    JsonNode.class,
+                    query.trim());
+
+            if (resposta == null || resposta.path("collection").isMissingNode()) {
+                LOGGER.warn("Resposta vazia da API de busca da NASA para query={}", query);
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                        .body("Não foi possível obter resultados da NASA neste momento.");
+            }
+
+            JsonNode items = resposta.path("collection").path("items");
+            List<BuscaAstronomicaItem> resultados = new ArrayList<>();
+
+            if (items.isArray()) {
+                for (JsonNode item : items) {
+                    if (resultados.size() >= limiteSeguro) {
+                        break;
+                    }
+
+                    JsonNode data = item.path("data");
+                    if (!data.isArray() || data.isEmpty()) {
+                        continue;
+                    }
+
+                    JsonNode info = data.get(0);
+                    String title = textoOuNulo(info, "title");
+                    String description = textoOuNulo(info, "description");
+                    String mediaType = textoOuNulo(info, "media_type");
+                    String nasaId = textoOuNulo(info, "nasa_id");
+                    String dateCreated = textoOuNulo(info, "date_created");
+
+                    JsonNode links = item.path("links");
+                    String mediaUrl = null;
+                    if (links.isArray() && !links.isEmpty()) {
+                        mediaUrl = textoOuNulo(links.get(0), "href");
+                    }
+
+                    if (title != null) {
+                        title = traducaoService.traduzirParaPortugues(title);
+                    }
+
+                    if (description != null) {
+                        description = traducaoService.traduzirParaPortugues(description);
+                    }
+
+                    resultados.add(new BuscaAstronomicaItem(
+                            title,
+                            description,
+                            mediaType,
+                            mediaUrl,
+                            nasaId,
+                            dateCreated));
+                }
+            }
+
+            return ResponseEntity.ok(resultados);
+        } catch (RestClientResponseException e) {
+            int statusCode = e.getStatusCode() != null ? e.getStatusCode().value() : 500;
+            LOGGER.error("Erro ao chamar a busca da NASA: status={}, corpo={}", statusCode, e.getResponseBodyAsString(), e);
+            return ResponseEntity.status(statusCode)
+                    .body("Erro ao acessar a busca da NASA: " + e.getStatusText());
+        } catch (RestClientException e) {
+            LOGGER.error("Erro inesperado ao buscar conteúdos astronômicos", e);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("Serviço indisponível no momento. Tente novamente mais tarde.");
+        }
+    }
+
+    private String textoOuNulo(JsonNode node, String campo) {
+        JsonNode valor = node.path(campo);
+        if (valor.isMissingNode() || valor.isNull()) {
+            return null;
+        }
+        String texto = valor.asText();
+        return texto == null || texto.isBlank() ? null : texto;
     }
 }
 

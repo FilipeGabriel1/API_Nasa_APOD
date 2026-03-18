@@ -22,6 +22,7 @@ O projeto expõe os seguintes endpoints principais:
 
 - `GET /apod` — retorna o objeto APOD em JSON (campos: `title`, `explanation`, `url`).
 - `GET /apod/image` — proxy que retorna a mídia (imagem) do APOD como binário (Content-Type apropriado). Se o APOD for vídeo, retorna 204 (não é imagem).
+- `GET /apod/search?query=<termo>&limit=<n>` — busca itens astronômicos no acervo da NASA (planetas, estrelas, galáxias etc.), com título/descrição traduzidos para pt-BR.
 - `GET /` — página estática (index) que busca `/apod` e exibe a imagem/título/explicação no navegador.
 
 Documentação interativa (Swagger UI):
@@ -61,6 +62,7 @@ java -jar .\target\NasaApod-0.0.1-SNAPSHOT.jar
 
 - Página da imagem: `http://localhost:8080/`
 - API JSON: `http://localhost:8080/apod`
+- Busca astronômica: `http://localhost:8080/apod/search?query=mars&limit=8`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 
 ## Configurar a chave da NASA

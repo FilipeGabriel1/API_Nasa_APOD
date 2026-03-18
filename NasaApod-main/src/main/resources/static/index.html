@@ -6,9 +6,11 @@
   <title>NASA APOD - Imagem do Dia</title>
   <style>
     body { font-family: Arial, Helvetica, sans-serif; background:#0b1020; color:#e6eef8; margin:0; padding:20px; }
-    .container{ max-width:900px; margin:24px auto; }
+    .container{ max-width:980px; margin:24px auto; }
     h1{ font-size:24px; margin:8px 0 12px; text-align:center }
+    h2{ margin:0 0 14px; font-size:20px; }
     .card{ background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)); padding:16px; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+    .card + .card{ margin-top:18px; }
     .media{ text-align:center; margin-bottom:12px }
     img { max-width:100%; border-radius:6px; }
     iframe{ width:100%; height:480px; border:none; border-radius:6px; }
@@ -16,6 +18,135 @@
     .meta{ font-size:14px; color:#9fb0d6; text-align:center }
     .error{ color:#ff9aa2; text-align:center }
     .spinner{ text-align:center; padding:40px 0 }
+
+    .search-form { display:flex; gap:8px; margin-bottom:14px; }
+    .search-form input {
+      flex:1;
+      padding:10px 12px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.2);
+      background:rgba(255,255,255,0.06);
+      color:#e6eef8;
+      font-size:15px;
+    }
+    .search-form button {
+      padding:10px 14px;
+      border:none;
+      border-radius:8px;
+      background:#1f6feb;
+      color:white;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .search-status { color:#9fb0d6; margin-bottom:12px; min-height:20px; }
+    .search-results {
+      display:grid;
+      gap:12px;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+    .search-item {
+      border:1px solid rgba(255,255,255,0.15);
+      background:rgba(255,255,255,0.03);
+      border-radius:8px;
+      overflow:hidden;
+      cursor:pointer;
+      transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .search-item:hover {
+      transform:translateY(-2px);
+      box-shadow:0 8px 20px rgba(0,0,0,0.35);
+      border-color:rgba(255,255,255,0.35);
+    }
+    .search-item.is-selected {
+      border-color:#6fb3ff;
+      box-shadow:0 0 0 1px rgba(111,179,255,0.5), 0 8px 20px rgba(0,0,0,0.35);
+    }
+    .search-item .thumb {
+      width:100%;
+      height:150px;
+      object-fit:cover;
+      background:#050914;
+    }
+    .search-item .content {
+      padding:10px;
+    }
+    .search-item h3 {
+      margin:0 0 8px;
+      font-size:16px;
+    }
+    .search-item p {
+      margin:0 0 8px;
+      font-size:14px;
+      line-height:1.4;
+      color:#d6e6ff;
+    }
+    .search-item .mini {
+      font-size:12px;
+      color:#9fb0d6;
+    }
+    .more-btn {
+      width:100%;
+      margin-top:8px;
+      border:none;
+      border-radius:6px;
+      padding:8px;
+      background:rgba(31,111,235,0.2);
+      color:#b6d6ff;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    .detail-box {
+      margin-top:14px;
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:8px;
+      padding:12px;
+      background:rgba(255,255,255,0.03);
+    }
+    .detail-box.hidden {
+      display:none;
+    }
+    .detail-box h3 {
+      margin:0 0 10px;
+      font-size:19px;
+    }
+    .detail-media {
+      margin-bottom:12px;
+      text-align:center;
+    }
+    .detail-media img,
+    .detail-media iframe {
+      width:100%;
+      max-height:500px;
+      object-fit:contain;
+      border-radius:8px;
+      background:#050914;
+    }
+    .detail-text {
+      white-space:pre-wrap;
+      line-height:1.55;
+      color:#d6e6ff;
+      margin-bottom:8px;
+    }
+    .detail-meta {
+      font-size:13px;
+      color:#9fb0d6;
+      margin-bottom:6px;
+    }
+    .detail-link {
+      color:#9bccff;
+      text-decoration:none;
+      font-weight:700;
+    }
+    .detail-link:hover {
+      text-decoration:underline;
+    }
+
+    @media (max-width: 700px) {
+      iframe { height:320px; }
+      .search-form { flex-direction:column; }
+      .search-form button { width:100%; }
+    }
   </style>
 </head>
 <body>
@@ -24,10 +155,24 @@
     <div id="content" class="card">
       <div class="spinner">Carregando...</div>
     </div>
+
+    <div class="card">
+      <h2>Busca Astronômica</h2>
+      <form id="searchForm" class="search-form">
+        <input id="searchInput" type="text" placeholder="Ex.: mars, jupiter, andromeda, black hole" required />
+        <button type="submit">Pesquisar</button>
+      </form>
+      <div id="searchStatus" class="search-status">Digite um termo e pesquise planetas, estrelas e outros conteúdos.</div>
+      <div id="searchResults" class="search-results"></div>
+      <div id="searchDetail" class="detail-box hidden"></div>
+    </div>
+
     <p class="meta">Fonte: NASA APOD · Dados traduzidos pelo serviço desta aplicação</p>
   </div>
 
   <script>
+    let resultadosAtuais = [];
+
     async function loadApod(){
       const content = document.getElementById('content');
       try{
@@ -71,6 +216,143 @@
       if(!s) return '';
       return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
     }
+
+    function truncar(texto, tamanho){
+      if(!texto) return '';
+      if(texto.length <= tamanho) return texto;
+      return `${texto.substring(0, tamanho)}...`;
+    }
+
+    function getDetalheLink(nasaId){
+      if(!nasaId) return '';
+      return `https://images.nasa.gov/details-${encodeURIComponent(nasaId)}.html`;
+    }
+
+    function renderMidiaDetalhe(item){
+      const mediaUrl = item.mediaUrl || '';
+
+      if(!mediaUrl){
+        return '<div class="detail-meta">Sem mídia disponível para este resultado.</div>';
+      }
+
+      const urlMinuscula = mediaUrl.toLowerCase();
+      if(urlMinuscula.includes('youtube.com') || urlMinuscula.includes('youtu.be')){
+        return `<iframe src="${escapeHtml(mediaUrl)}" allowfullscreen loading="lazy"></iframe>`;
+      }
+
+      if(urlMinuscula.endsWith('.mp4')){
+        return `<video controls style="width:100%;border-radius:8px;background:#050914"><source src="${escapeHtml(mediaUrl)}" type="video/mp4"></video>`;
+      }
+
+      return `<img src="${escapeHtml(mediaUrl)}" alt="Mídia de ${escapeHtml(item.title || 'resultado da NASA')}" loading="lazy" />`;
+    }
+
+    function mostrarDetalhe(index){
+      const detail = document.getElementById('searchDetail');
+      const item = resultadosAtuais[index];
+      if(!item){
+        detail.classList.add('hidden');
+        detail.innerHTML = '';
+        return;
+      }
+
+      const title = escapeHtml(item.title || 'Sem título');
+      const description = escapeHtml(item.description || 'Sem descrição disponível.');
+      const mediaType = escapeHtml(item.mediaType || 'desconhecido');
+      const dateCreated = escapeHtml(item.dateCreated || 'data indisponível');
+      const nasaId = escapeHtml(item.nasaId || 'não informado');
+      const detalheLink = getDetalheLink(item.nasaId);
+
+      detail.innerHTML = `
+        <h3>${title}</h3>
+        <div class="detail-media">${renderMidiaDetalhe(item)}</div>
+        <div class="detail-text">${description}</div>
+        <div class="detail-meta">Tipo: ${mediaType}</div>
+        <div class="detail-meta">Data: ${dateCreated}</div>
+        <div class="detail-meta">NASA ID: ${nasaId}</div>
+        ${detalheLink ? `<a class="detail-link" href="${detalheLink}" target="_blank" rel="noopener noreferrer">Abrir página oficial na NASA</a>` : ''}
+      `;
+      detail.classList.remove('hidden');
+
+      document.querySelectorAll('.search-item').forEach((el) => el.classList.remove('is-selected'));
+      const selecionado = document.querySelector(`.search-item[data-index="${index}"]`);
+      if(selecionado){
+        selecionado.classList.add('is-selected');
+      }
+
+      detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function pesquisarAstronomia(query){
+      const status = document.getElementById('searchStatus');
+      const results = document.getElementById('searchResults');
+      const detail = document.getElementById('searchDetail');
+      status.textContent = `Buscando por "${query}"...`;
+      results.innerHTML = '';
+      detail.classList.add('hidden');
+      detail.innerHTML = '';
+      resultadosAtuais = [];
+
+      try {
+        const res = await fetch(`/apod/search?query=${encodeURIComponent(query)}&limit=8`);
+        if(!res.ok){
+          status.textContent = `Erro na busca: ${res.status} ${res.statusText}`;
+          return;
+        }
+
+        const items = await res.json();
+        if(!Array.isArray(items) || items.length === 0){
+          status.textContent = `Nenhum resultado encontrado para "${query}".`;
+          return;
+        }
+
+        resultadosAtuais = items;
+        status.textContent = `${items.length} resultado(s) para "${query}".`;
+
+        results.innerHTML = items.map((item, index) => {
+          const title = escapeHtml(item.title || 'Sem título');
+          const description = escapeHtml(truncar(item.description || 'Sem descrição.', 220));
+          const mediaType = escapeHtml(item.mediaType || 'desconhecido');
+          const dateCreated = escapeHtml(item.dateCreated || 'data indisponível');
+          const mediaUrl = item.mediaUrl ? escapeHtml(item.mediaUrl) : '';
+
+          const thumb = mediaUrl
+            ? `<img class="thumb" src="${mediaUrl}" alt="Miniatura de ${title}" loading="lazy" />`
+            : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb0d6">Sem imagem</div>`;
+
+          return `
+            <article class="search-item" data-index="${index}">
+              ${thumb}
+              <div class="content">
+                <h3>${title}</h3>
+                <p>${description}</p>
+                <div class="mini">Tipo: ${mediaType}</div>
+                <div class="mini">Data: ${dateCreated}</div>
+                <button class="more-btn" type="button">Saiba mais</button>
+              </div>
+            </article>
+          `;
+        }).join('');
+
+        results.querySelectorAll('.search-item').forEach((elemento) => {
+          elemento.addEventListener('click', () => {
+            const index = Number(elemento.getAttribute('data-index'));
+            mostrarDetalhe(index);
+          });
+        });
+      } catch (err) {
+        status.textContent = `Erro ao pesquisar: ${escapeHtml(err.message || String(err))}`;
+      }
+    }
+
+    document.getElementById('searchForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const query = document.getElementById('searchInput').value.trim();
+      if(!query){
+        return;
+      }
+      pesquisarAstronomia(query);
+    });
 
     loadApod();
   </script>
